@@ -17,7 +17,9 @@ end
 
 local ADDON_VERSION = GetAddonVersion()
 
-local entries = {
+local entries = {}
+
+--[[local entries = {
     -- Achievements
     { kind = "achievement", id = 6 },          -- Level 10
     { kind = "achievement", id = 42703 },
@@ -28,7 +30,7 @@ local entries = {
     { kind = "item", id = 6948 },              -- Hearthstone
     { kind = "item", id = 19019 },             -- Thunderfury
     { kind = "achievement", id = 5313 },
-}
+}]]
 
 local rows = {}
 
@@ -63,8 +65,11 @@ table.insert(UISpecialFrames, "TheList")
 
 frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 frame.title:SetPoint("LEFT", frame.TitleBg, "LEFT", 8, 0)
+
+local _, _, _, artifactColorHex = C_Item.GetItemQualityColor(6)
 frame.title:SetText(
-    "TheList |cffffff00v" .. ADDON_VERSION .. "|r by |cff00ffffRaynesz|r"
+    "TheList |cffffff00v" .. ADDON_VERSION .. "|r :: github.com/|c"
+    .. artifactColorHex .. "raynesz|r/|cff79c2ffthelist|r"
 )
 
 -- Bottom controls container.
@@ -162,7 +167,6 @@ local function ToggleAchievementTracking(achievementID)
     -- Retail/newer clients
     if C_ContentTracking and C_ContentTracking.StartTracking and C_ContentTracking.StopTracking
         and Enum and Enum.ContentTrackingType and Enum.ContentTrackingType.Achievement then
-
         local achievementType = Enum.ContentTrackingType.Achievement
         local stopType = Enum.ContentTrackingStopType and Enum.ContentTrackingStopType.Manual or 1
 
@@ -204,8 +208,8 @@ end
 -- Item data can be uncached, so this may temporarily return "Loading..."
 local function GetItemDisplayInfo(itemID)
     local itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType,
-          itemSubType, itemStackCount, itemEquipLoc, itemTexture =
-          C_Item.GetItemInfo(itemID)
+    itemSubType, itemStackCount, itemEquipLoc, itemTexture =
+        C_Item.GetItemInfo(itemID)
 
     if itemName then
         local r, g, b = GetItemQualityColor(itemQuality or 1)
