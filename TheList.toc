@@ -4,5 +4,6 @@
 ## IconTexture: Interface\FriendsFrame\StatusIcon-DnD
 ## Author: Raynesz
 ## Version: 0.9
+## SavedVariables: TheListDB
 
 TheList.lua

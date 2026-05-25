@@ -17,20 +17,25 @@ end
 
 local ADDON_VERSION = GetAddonVersion()
 
-local entries = {}
+local entries = nil
 
---[[local entries = {
-    -- Achievements
-    { kind = "achievement", id = 6 },          -- Level 10
-    { kind = "achievement", id = 42703 },
-    { kind = "achievement", id = 8 },          -- Level 30
-    { kind = "achievement", id = 40864 },
+local function InitializeSavedVariables()
+    TheListDB = TheListDB or {}
+    TheListDB.entries = TheListDB.entries or {}
 
-    -- Items
-    { kind = "item", id = 6948 },              -- Hearthstone
-    { kind = "item", id = 19019 },             -- Thunderfury
-    { kind = "achievement", id = 5313 },
-}]]
+    entries = TheListDB.entries
+end
+
+--[[
+Example saved data shape:
+
+TheListDB = {
+    entries = {
+        { kind = "achievement", id = 6 },
+        { kind = "item", id = 6948 },
+    },
+}
+]]
 
 local rows = {}
 
@@ -244,7 +249,7 @@ local function ShowPermanentItemTooltip(itemID)
 end
 
 local function RemoveEntryAtIndex(index)
-    if not index or not entries[index] then
+    if not index or not entries or not entries[index] then
         return
     end
 
@@ -535,6 +540,10 @@ local function ConfigureRow(row, entry, index)
 end
 
 RefreshList = function()
+    if not entries then
+        return
+    end
+
     for index, entry in ipairs(entries) do
         local row = rows[index] or CreateMixedRow(index)
         ConfigureRow(row, entry, index)
@@ -556,6 +565,11 @@ local function AddEntryFromControls()
 
     if not id then
         print("|cffff5555Invalid ID.|r")
+        return
+    end
+
+    if not entries then
+        print("|cffff5555TheList saved variables are not ready yet.|r")
         return
     end
 
@@ -624,14 +638,28 @@ frame.addButton:SetScript("OnClick", function()
     AddEntryFromControls()
 end)
 
-RefreshList()
-
--- Refresh item rows when uncached item data becomes available
+-- Events
 local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 
-eventFrame:SetScript("OnEvent", function()
-    RefreshList()
+eventFrame:SetScript("OnEvent", function(self, event, arg1)
+    if event == "ADDON_LOADED" then
+        if arg1 ~= ADDON_NAME then
+            return
+        end
+
+        InitializeSavedVariables()
+        RefreshList()
+        return
+    end
+
+    -- Refresh item rows when uncached item data becomes available.
+    if event == "GET_ITEM_INFO_RECEIVED" then
+        if entries then
+            RefreshList()
+        end
+    end
 end)
 
 -- Slash commands
