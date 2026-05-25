@@ -1,0 +1,8 @@
+## Interface: 120005
+## Title: TheList
+## Notes: List Items and Achievements
+## IconTexture: Interface\FriendsFrame\StatusIcon-DnD
+## Author: Raynesz
+## Version: 0.9
+
+TheList.lua
