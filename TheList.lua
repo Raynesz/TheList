@@ -39,8 +39,12 @@ TheListDB = {
 
 local rows = {}
 
-local FRAME_WIDTH = 450
+local FRAME_WIDTH = 420
 local FRAME_HEIGHT = 420
+local MIN_FRAME_WIDTH = 420
+local MIN_FRAME_HEIGHT = 400
+local MAX_FRAME_WIDTH = 900
+local MAX_FRAME_HEIGHT = 900
 
 local ROW_HEIGHT = 30
 local ROW_GAP = 1
@@ -64,11 +68,21 @@ local frame = CreateFrame("Frame", "TheList", UIParent, "BasicFrameTemplateWithI
 frame:SetSize(FRAME_WIDTH, FRAME_HEIGHT)
 frame:SetPoint("CENTER")
 frame:SetMovable(true)
+frame:SetResizable(true)
 frame:EnableMouse(true)
 frame:RegisterForDrag("LeftButton")
 frame:SetScript("OnDragStart", frame.StartMoving)
 frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 frame:Hide()
+
+if frame.SetResizeBounds then
+    frame:SetResizeBounds(MIN_FRAME_WIDTH, MIN_FRAME_HEIGHT, MAX_FRAME_WIDTH, MAX_FRAME_HEIGHT)
+elseif frame.SetMinResize and frame.SetMaxResize then
+    frame:SetMinResize(MIN_FRAME_WIDTH, MIN_FRAME_HEIGHT)
+    frame:SetMaxResize(MAX_FRAME_WIDTH, MAX_FRAME_HEIGHT)
+elseif frame.SetMinResize then
+    frame:SetMinResize(MIN_FRAME_WIDTH, MIN_FRAME_HEIGHT)
+end
 
 -- Make Escape close this window.
 table.insert(UISpecialFrames, "TheList")
@@ -82,10 +96,30 @@ frame.title:SetText(
     .. artifactColorHex .. "raynesz|r/|cff79c2ffthelist|r"
 )
 
+-- Bottom-right resize handle.
+frame.resizeButton = CreateFrame("Button", nil, frame)
+frame.resizeButton:SetSize(16, 16)
+frame.resizeButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -6, 6)
+frame.resizeButton:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+frame.resizeButton:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+frame.resizeButton:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+
+frame.resizeButton:SetScript("OnMouseDown", function()
+    frame:StartSizing("BOTTOMRIGHT")
+end)
+
+frame.resizeButton:SetScript("OnMouseUp", function()
+    frame:StopMovingOrSizing()
+
+    if RefreshList then
+        RefreshList()
+    end
+end)
+
 -- Bottom controls container.
 frame.controls = CreateFrame("Frame", nil, frame, "BackdropTemplate")
 frame.controls:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 8)
-frame.controls:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 8)
+frame.controls:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -28, 8)
 frame.controls:SetHeight(46)
 
 frame.controls:SetBackdrop({
@@ -126,6 +160,11 @@ frame.scrollChild:SetScript("OnMouseUp", function()
         FinishRowDrag()
     end
 end)
+
+local function GetCurrentRowWidth()
+    local scrollWidth = frame.scrollFrame:GetWidth() or ROW_WIDTH
+    return math.max(220, scrollWidth - ROW_LEFT_INDENT - 4)
+end
 
 local function GetMouseOverRowIndex()
     for _, row in ipairs(rows) do
@@ -356,8 +395,8 @@ local function HideRemoveButton(row)
 end
 
 local function UpdateRowTextWidth(row)
-    local maxTextWidth = ROW_WIDTH - TICK_SLOT_WIDTH - ICON_SIZE - 14
-    row.text:SetWidth(maxTextWidth)
+    local maxTextWidth = row:GetWidth() - TICK_SLOT_WIDTH - ICON_SIZE - 14
+    row.text:SetWidth(math.max(120, maxTextWidth))
 end
 
 local function ConfigureAchievementRow(row, entry)
@@ -518,7 +557,7 @@ end
 
 local function CreateMixedRow(index)
     local row = CreateFrame("Button", nil, frame.scrollChild)
-    row:SetSize(ROW_WIDTH, ROW_HEIGHT)
+    row:SetSize(GetCurrentRowWidth(), ROW_HEIGHT)
 
     if index == 1 then
         row:SetPoint("TOPLEFT", frame.scrollChild, "TOPLEFT", ROW_LEFT_INDENT, 0)
@@ -613,7 +652,7 @@ local function CreateMixedRow(index)
         RemoveEntryAtIndex(row.index)
     end)
 
-    -- Normal achievement/item icon
+    -- Normal achievement/item icon. This comes after the tick/delete slot.
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(ICON_SIZE, ICON_SIZE)
     row.icon:SetPoint("LEFT", row.statusSlot, "RIGHT", 3, 0)
@@ -644,6 +683,8 @@ local function ConfigureRow(row, entry, index)
     row.entry = entry
     row.index = index
 
+    row:SetWidth(GetCurrentRowWidth())
+
     if entry.kind == "achievement" then
         ConfigureAchievementRow(row, entry)
     elseif entry.kind == "item" then
@@ -664,8 +705,11 @@ RefreshList = function()
         return
     end
 
+    local currentRowWidth = GetCurrentRowWidth()
+
     for index, entry in ipairs(entries) do
         local row = rows[index] or CreateMixedRow(index)
+        row:SetWidth(currentRowWidth)
         ConfigureRow(row, entry, index)
         row:SetAlpha(1)
         row:Show()
@@ -677,8 +721,14 @@ RefreshList = function()
 
     local contentHeight = math.max(1, (#entries * ROW_HEIGHT) + math.max(0, (#entries - 1) * ROW_GAP))
     frame.scrollChild:SetHeight(contentHeight)
-    frame.scrollChild:SetWidth(ROW_WIDTH + ROW_LEFT_INDENT)
+    frame.scrollChild:SetWidth(currentRowWidth + ROW_LEFT_INDENT)
 end
+
+frame:SetScript("OnSizeChanged", function()
+    if RefreshList then
+        RefreshList()
+    end
+end)
 
 local function AddEntryFromControls()
     local rawID = frame.idEditBox:GetText()
