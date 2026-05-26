@@ -399,6 +399,16 @@ local function UpdateRowTextWidth(row)
     row.text:SetWidth(math.max(120, maxTextWidth))
 end
 
+local function AddCommonTooltipLines(kind)
+    GameTooltip:AddLine(" ", 1, 1, 1)
+
+    if kind == "achievement" then
+        GameTooltip:AddLine("Ctrl-click: Track/untrack achievement", 1, 1, 1)
+    end
+
+    GameTooltip:AddLine("Drag: Reorder", 1, 1, 1)
+end
+
 local function ConfigureAchievementRow(row, entry)
     local id, name, points, completed, month, day, year, description, flags, icon =
         GetAchievementInfo(entry.id)
@@ -469,7 +479,7 @@ local function ConfigureAchievementRow(row, entry)
             GameTooltip:AddLine("Achievement ID: " .. tostring(entry.id), 1, 0, 0)
         end
 
-        GameTooltip:AddLine("Drag to reorder", 0.8, 0.8, 0.8)
+        AddCommonTooltipLines("achievement")
         GameTooltip:Show()
     end)
 end
@@ -523,7 +533,7 @@ local function ConfigureItemRow(row, entry)
 
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetItemByID(entry.id)
-        GameTooltip:AddLine("Drag to reorder", 0.8, 0.8, 0.8)
+        AddCommonTooltipLines("item")
         GameTooltip:Show()
     end)
 end
@@ -550,7 +560,7 @@ local function ConfigureInvalidRow(row, entry)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText("Invalid entry")
         GameTooltip:AddLine("Unknown kind: " .. tostring(entry.kind), 1, 0, 0)
-        GameTooltip:AddLine("Drag to reorder", 0.8, 0.8, 0.8)
+        AddCommonTooltipLines("invalid")
         GameTooltip:Show()
     end)
 end
