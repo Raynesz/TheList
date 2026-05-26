@@ -333,7 +333,7 @@ local function ShowRemoveButton(row)
         return
     end
 
-    row.icon:Hide()
+    row.completedCheck:Hide()
     row.removeButton:Show()
 end
 
@@ -344,14 +344,19 @@ local function HideRemoveButton(row)
 
     row.removeButton:Hide()
     row.removeButtonGlow:Hide()
-    row.icon:Show()
+
+    if row.shouldShowCompletedCheck then
+        row.completedCheck:Show()
+    else
+        row.completedCheck:Hide()
+    end
 
     row.removeButton:ClearAllPoints()
-    row.removeButton:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
+    row.removeButton:SetPoint("CENTER", row.statusSlot, "CENTER", 0, 0)
 end
 
 local function UpdateRowTextWidth(row)
-    local maxTextWidth = ROW_WIDTH - ICON_SIZE - 8 - TICK_SLOT_WIDTH - 8
+    local maxTextWidth = ROW_WIDTH - TICK_SLOT_WIDTH - ICON_SIZE - 14
     row.text:SetWidth(maxTextWidth)
 end
 
@@ -364,7 +369,9 @@ local function ConfigureAchievementRow(row, entry)
     row.icon:SetVertexColor(1, 1, 1, 1)
     row.icon:Show()
 
-    if completed then
+    row.shouldShowCompletedCheck = completed and true or false
+
+    if row.shouldShowCompletedCheck then
         row.completedCheck:Show()
     else
         row.completedCheck:Hide()
@@ -376,6 +383,7 @@ local function ConfigureAchievementRow(row, entry)
     else
         row.text:SetText("|cffff0000Unknown achievement ID: " .. tostring(entry.id) .. "|r")
         row.text:SetTextColor(1, 0, 0)
+        row.shouldShowCompletedCheck = false
         row.completedCheck:Hide()
     end
 
@@ -435,6 +443,7 @@ local function ConfigureItemRow(row, entry)
     row.icon:SetVertexColor(1, 1, 1, 1)
     row.icon:Show()
 
+    row.shouldShowCompletedCheck = false
     row.completedCheck:Hide()
 
     row.text:SetText("[" .. itemName .. "]")
@@ -486,6 +495,7 @@ local function ConfigureInvalidRow(row, entry)
     row.icon:SetVertexColor(1, 1, 1, 1)
     row.icon:Show()
 
+    row.shouldShowCompletedCheck = false
     row.completedCheck:Hide()
 
     row.text:SetText("|cffff0000Unknown entry kind: " .. tostring(entry.kind) .. "|r")
@@ -542,24 +552,31 @@ local function CreateMixedRow(index)
         end
     end)
 
-    -- Normal achievement/item icon.
-    row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(ICON_SIZE, ICON_SIZE)
-    row.icon:SetPoint("LEFT", row, "LEFT", 0, 0)
+    -- First slot: completed tick, empty space, or delete button on hover.
+    row.statusSlot = CreateFrame("Frame", nil, row)
+    row.statusSlot:SetSize(TICK_SLOT_WIDTH, ROW_HEIGHT)
+    row.statusSlot:SetPoint("LEFT", row, "LEFT", 0, 0)
+
+    row.completedCheck = row:CreateTexture(nil, "OVERLAY")
+    row.completedCheck:SetSize(TICK_SIZE, TICK_SIZE)
+    row.completedCheck:SetPoint("CENTER", row.statusSlot, "CENTER", 0, 0)
+    row.completedCheck:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    row.completedCheck:SetVertexColor(0.25, 1, 0.25, 1)
+    row.completedCheck:Hide()
 
     -- Glow behind the remove button.
     row.removeButtonGlow = row:CreateTexture(nil, "BACKGROUND")
     row.removeButtonGlow:SetSize(34, 34)
-    row.removeButtonGlow:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
+    row.removeButtonGlow:SetPoint("CENTER", row.statusSlot, "CENTER", 0, 0)
     row.removeButtonGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
     row.removeButtonGlow:SetBlendMode("ADD")
     row.removeButtonGlow:SetVertexColor(1, 0.15, 0.15, 0.85)
     row.removeButtonGlow:Hide()
 
-    -- Real animated X button.
+    -- Real animated X button. This replaces the tick/empty slot on hover.
     row.removeButton = CreateFrame("Button", nil, row, "UIPanelCloseButton")
     row.removeButton:SetSize(28, 28)
-    row.removeButton:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
+    row.removeButton:SetPoint("CENTER", row.statusSlot, "CENTER", 0, 0)
     row.removeButton:SetFrameLevel(row:GetFrameLevel() + 8)
     row.removeButton:Hide()
 
@@ -579,13 +596,13 @@ local function CreateMixedRow(index)
 
     row.removeButton:SetScript("OnMouseDown", function(self)
         self:ClearAllPoints()
-        self:SetPoint("CENTER", row.icon, "CENTER", 1, -1)
+        self:SetPoint("CENTER", row.statusSlot, "CENTER", 1, -1)
         row.removeButtonGlow:SetAlpha(1)
     end)
 
     row.removeButton:SetScript("OnMouseUp", function(self)
         self:ClearAllPoints()
-        self:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
+        self:SetPoint("CENTER", row.statusSlot, "CENTER", 0, 0)
         row.removeButtonGlow:SetAlpha(0.85)
     end)
 
@@ -596,17 +613,14 @@ local function CreateMixedRow(index)
         RemoveEntryAtIndex(row.index)
     end)
 
-    -- Tick slot. This slot always exists so names line up.
-    row.completedCheck = row:CreateTexture(nil, "OVERLAY")
-    row.completedCheck:SetSize(TICK_SIZE, TICK_SIZE)
-    row.completedCheck:SetPoint("LEFT", row.icon, "RIGHT", 3, 0)
-    row.completedCheck:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-    row.completedCheck:SetVertexColor(0.25, 1, 0.25, 1)
-    row.completedCheck:Hide()
+    -- Normal achievement/item icon
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(ICON_SIZE, ICON_SIZE)
+    row.icon:SetPoint("LEFT", row.statusSlot, "RIGHT", 3, 0)
 
-    -- Text starts after the reserved tick slot.
+    -- Text starts after the icon.
     row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.text:SetPoint("LEFT", row.icon, "RIGHT", 8 + TICK_SLOT_WIDTH, 0)
+    row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
     row.text:SetJustifyH("LEFT")
     row.text:SetJustifyV("MIDDLE")
     row.text:SetWordWrap(true)
