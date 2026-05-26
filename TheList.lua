@@ -53,6 +53,11 @@ local TICK_SLOT_WIDTH = 24
 
 local selectedKind = "achievement"
 local RefreshList
+local FinishRowDrag
+
+local draggedEntryIndex = nil
+local draggedRow = nil
+local didDragEntry = false
 
 -- Main addon window
 local frame = CreateFrame("Frame", "TheList", UIParent, "BasicFrameTemplateWithInset")
@@ -114,6 +119,69 @@ frame.scrollFrame:SetPoint("BOTTOMRIGHT", frame.controls, "TOPRIGHT", -24, 8)
 frame.scrollChild = CreateFrame("Frame", nil, frame.scrollFrame)
 frame.scrollChild:SetSize(ROW_WIDTH + ROW_LEFT_INDENT, 1)
 frame.scrollFrame:SetScrollChild(frame.scrollChild)
+
+frame.scrollChild:EnableMouse(true)
+frame.scrollChild:SetScript("OnMouseUp", function()
+    if FinishRowDrag then
+        FinishRowDrag()
+    end
+end)
+
+local function GetMouseOverRowIndex()
+    for _, row in ipairs(rows) do
+        if row:IsShown() and row:IsMouseOver() then
+            return row.index
+        end
+    end
+
+    return nil
+end
+
+local function MoveEntry(fromIndex, toIndex)
+    if not entries then
+        return
+    end
+
+    if not fromIndex or not toIndex then
+        return
+    end
+
+    if fromIndex == toIndex then
+        return
+    end
+
+    if not entries[fromIndex] or not entries[toIndex] then
+        return
+    end
+
+    local movedEntry = table.remove(entries, fromIndex)
+    table.insert(entries, toIndex, movedEntry)
+
+    if RefreshList then
+        RefreshList()
+    end
+end
+
+FinishRowDrag = function()
+    if draggedEntryIndex then
+        local targetIndex = GetMouseOverRowIndex()
+
+        if targetIndex then
+            MoveEntry(draggedEntryIndex, targetIndex)
+        end
+    end
+
+    if draggedRow then
+        draggedRow:SetAlpha(1)
+    end
+
+    draggedEntryIndex = nil
+    draggedRow = nil
+
+    C_Timer.After(0, function()
+        didDragEntry = false
+    end)
+end
 
 -- Opens Blizzard achievement UI and jumps to achievement
 local function OpenAchievementByID(achievementID)
@@ -314,6 +382,10 @@ local function ConfigureAchievementRow(row, entry)
     UpdateRowTextWidth(row)
 
     row:SetScript("OnClick", function(self, button)
+        if didDragEntry then
+            return
+        end
+
         if button ~= "LeftButton" then
             return
         end
@@ -350,6 +422,7 @@ local function ConfigureAchievementRow(row, entry)
             GameTooltip:AddLine("Achievement ID: " .. tostring(entry.id), 1, 0, 0)
         end
 
+        GameTooltip:AddLine("Drag to reorder", 0.8, 0.8, 0.8)
         GameTooltip:Show()
     end)
 end
@@ -370,6 +443,10 @@ local function ConfigureItemRow(row, entry)
     UpdateRowTextWidth(row)
 
     row:SetScript("OnClick", function(self, button)
+        if didDragEntry then
+            return
+        end
+
         if button ~= "LeftButton" then
             return
         end
@@ -398,6 +475,7 @@ local function ConfigureItemRow(row, entry)
 
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetItemByID(entry.id)
+        GameTooltip:AddLine("Drag to reorder", 0.8, 0.8, 0.8)
         GameTooltip:Show()
     end)
 end
@@ -423,6 +501,7 @@ local function ConfigureInvalidRow(row, entry)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText("Invalid entry")
         GameTooltip:AddLine("Unknown kind: " .. tostring(entry.kind), 1, 0, 0)
+        GameTooltip:AddLine("Drag to reorder", 0.8, 0.8, 0.8)
         GameTooltip:Show()
     end)
 end
@@ -438,6 +517,30 @@ local function CreateMixedRow(index)
     end
 
     row:RegisterForClicks("LeftButtonUp")
+    row:RegisterForDrag("LeftButton")
+
+    row:SetScript("OnDragStart", function(self)
+        if not self.index then
+            return
+        end
+
+        draggedEntryIndex = self.index
+        draggedRow = self
+        didDragEntry = true
+        self:SetAlpha(0.5)
+    end)
+
+    row:SetScript("OnDragStop", function(self)
+        if FinishRowDrag then
+            FinishRowDrag()
+        end
+    end)
+
+    row:SetScript("OnMouseUp", function(self)
+        if draggedEntryIndex and FinishRowDrag then
+            FinishRowDrag()
+        end
+    end)
 
     -- Normal achievement/item icon.
     row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -487,6 +590,9 @@ local function CreateMixedRow(index)
     end)
 
     row.removeButton:SetScript("OnClick", function(self)
+        didDragEntry = false
+        draggedEntryIndex = nil
+        draggedRow = nil
         RemoveEntryAtIndex(row.index)
     end)
 
@@ -547,6 +653,7 @@ RefreshList = function()
     for index, entry in ipairs(entries) do
         local row = rows[index] or CreateMixedRow(index)
         ConfigureRow(row, entry, index)
+        row:SetAlpha(1)
         row:Show()
     end
 
