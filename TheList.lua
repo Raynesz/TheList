@@ -222,6 +222,234 @@ FinishRowDrag = function()
     end)
 end
 
+-- Achievement Ctrl-click detection.
+-- This intentionally uses GLOBAL_MOUSE_DOWN instead of hooking Blizzard achievement rows,
+-- because the modern Achievement UI may put the achievement ID on a child, parent, or
+-- scrollbox element rather than the visible row button itself.
+local function IsAchievementFrameOpen()
+    return AchievementFrame and AchievementFrame:IsShown()
+end
+
+local function IsValidAchievementID(value)
+    local achievementID = tonumber(value)
+
+    if not achievementID then
+        return nil
+    end
+
+    local id, name = GetAchievementInfo(achievementID)
+
+    if id and name then
+        return id
+    end
+
+    return nil
+end
+
+local function TryGetAchievementIDFromObject(object)
+    if not object then
+        return nil
+    end
+
+    local validID
+
+    validID = IsValidAchievementID(object.id)
+    if validID then
+        return validID
+    end
+
+    validID = IsValidAchievementID(object.achievementID)
+    if validID then
+        return validID
+    end
+
+    validID = IsValidAchievementID(object.AchievementID)
+    if validID then
+        return validID
+    end
+
+    if object.elementData then
+        validID = IsValidAchievementID(
+            object.elementData.id
+            or object.elementData.achievementID
+            or object.elementData.AchievementID
+        )
+
+        if validID then
+            return validID
+        end
+    end
+
+    if object.data then
+        validID = IsValidAchievementID(
+            object.data.id
+            or object.data.achievementID
+            or object.data.AchievementID
+        )
+
+        if validID then
+            return validID
+        end
+    end
+
+    if object.GetElementData then
+        local ok, elementData = pcall(object.GetElementData, object)
+
+        if ok and elementData then
+            validID = IsValidAchievementID(
+                elementData.id
+                or elementData.achievementID
+                or elementData.AchievementID
+            )
+
+            if validID then
+                return validID
+            end
+        end
+    end
+
+    if object.GetData then
+        local ok, data = pcall(object.GetData, object)
+
+        if ok and data then
+            validID = IsValidAchievementID(
+                data.id
+                or data.achievementID
+                or data.AchievementID
+            )
+
+            if validID then
+                return validID
+            end
+        end
+    end
+
+    return nil
+end
+
+local function FindAchievementIDFromObjectAndParents(object)
+    local current = object
+    local depth = 0
+
+    while current and depth < 30 do
+        local achievementID = TryGetAchievementIDFromObject(current)
+
+        if achievementID then
+            return achievementID
+        end
+
+        if current.GetParent then
+            current = current:GetParent()
+        else
+            current = nil
+        end
+
+        depth = depth + 1
+    end
+
+    return nil
+end
+
+local function GetMouseFocusObjects()
+    local objects = {}
+
+    if GetMouseFoci then
+        local results = { GetMouseFoci() }
+
+        -- Some clients return multiple values; some return one table.
+        if #results == 1 and type(results[1]) == "table" and not results[1].GetParent then
+            for _, object in ipairs(results[1]) do
+                table.insert(objects, object)
+            end
+        else
+            for _, object in ipairs(results) do
+                table.insert(objects, object)
+            end
+        end
+    end
+
+    if GetMouseFocus then
+        local object = GetMouseFocus()
+
+        if object then
+            table.insert(objects, object)
+        end
+    end
+
+    return objects
+end
+
+local function FindAchievementIDUnderMouse()
+    for _, object in ipairs(GetMouseFocusObjects()) do
+        local achievementID = FindAchievementIDFromObjectAndParents(object)
+
+        if achievementID then
+            return achievementID
+        end
+    end
+
+    return nil
+end
+
+local function FindAchievementEntryIndex(achievementID)
+    if not entries then
+        return nil
+    end
+
+    for index, entry in ipairs(entries) do
+        if entry.kind == "achievement" and entry.id == achievementID then
+            return index
+        end
+    end
+
+    return nil
+end
+
+local function ToggleAchievementInTheList(achievementID)
+    if not achievementID then
+        return
+    end
+
+    if not entries then
+        InitializeSavedVariables()
+    end
+
+    local _, name = GetAchievementInfo(achievementID)
+    local existingIndex = FindAchievementEntryIndex(achievementID)
+
+    if existingIndex then
+        table.remove(entries, existingIndex)
+        print("|cffff5555Removed achievement from TheList:|r " ..
+            tostring(achievementID) .. " |cffffffff" .. tostring(name or "") .. "|r")
+    else
+        table.insert(entries, {
+            kind = "achievement",
+            id = achievementID,
+        })
+
+        print("|cff55ff55Added achievement to TheList:|r " ..
+            tostring(achievementID) .. " |cffffffff" .. tostring(name or "") .. "|r")
+    end
+
+    if RefreshList then
+        RefreshList()
+    end
+end
+
+local function HandleAchievementCtrlClick()
+    if not IsAchievementFrameOpen() then
+        return
+    end
+
+    local achievementID = FindAchievementIDUnderMouse()
+
+    if not achievementID then
+        return
+    end
+
+    ToggleAchievementInTheList(achievementID)
+end
+
 -- Opens Blizzard achievement UI and jumps to achievement
 local function OpenAchievementByID(achievementID)
     if not AchievementFrame then
@@ -449,7 +677,7 @@ local function ConfigureAchievementRow(row, entry)
 
         local achievementLink = GetAchievementLink(entry.id)
 
-        -- Ctrl-click: track/untrack achievement
+        -- Ctrl-click: track/untrack achievement from TheList's own rows.
         if IsControlKeyDown() then
             ToggleAchievementTracking(entry.id)
             return
@@ -823,8 +1051,17 @@ end)
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+eventFrame:RegisterEvent("GLOBAL_MOUSE_DOWN")
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1)
+    if event == "GLOBAL_MOUSE_DOWN" then
+        if arg1 == "LeftButton" and IsControlKeyDown() then
+            HandleAchievementCtrlClick()
+        end
+
+        return
+    end
+
     if event == "ADDON_LOADED" then
         if arg1 ~= ADDON_NAME then
             return

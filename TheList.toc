@@ -1,9 +1,9 @@
 ## Interface: 120005
 ## Title: TheList
 ## Notes: List Items and Achievements
-## IconTexture: Interface\FriendsFrame\StatusIcon-DnD
+## IconTexture: Interface\FriendsFrame\StatusIcon-Online
 ## Author: Raynesz
-## Version: 0.9
+## Version: 1.0
 ## SavedVariables: TheListDB
 
 TheList.lua
